@@ -7,29 +7,39 @@ on:
 jobs:
   fetch_nodes:
     runs-on: ubuntu-latest
-    permissions: # 显式声明权限，防止 Settings 里没改对
+    permissions:
       contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Download and Merge
+      - name: Download and Convert
         run: |
-          # 如果 xeton 挂了，换成这个 id9 的后端尝试
-          SOURCE_1="https://raw.githubusercontent.com/anaer/Sub/main/clash.yaml"
-          curl -L -o nodes.yaml "https://url.v1.mk/sub?target=clash&list=true&url=${SOURCE_1}"
+          # 1. 下载原始文件并保存为 temp.txt
+          # 我们先拿这个源测试：它很稳
+          curl -L -o temp.txt "https://raw.githubusercontent.com/anaer/Sub/main/clash.yaml"
+          
+          # 2. 调用后端进行转换。注意：我们把 temp.txt 传给后端
+          # 使用 raw.githubusercontent.com 往往会被后端防火墙拦截，
+          # 所以我们直接通过转换接口处理已经下载好的内容（或者直接用它的订阅链接）
+          SUB_URL="https://raw.githubusercontent.com/anaer/Sub/main/clash.yaml"
+          
+          # 这里换一个更强力的公共后端：url.v1.mk
+          curl -L -o nodes.yaml "https://url.v1.mk/sub?target=clash&list=true&url=${SUB_URL}"
+          
+          # 3. 检查文件大小，如果小于 100 字节，说明转换失败，报错停止，不推送到仓库
+          if [ $(stat -c%s "nodes.yaml") -lt 100 ]; then
+            echo "Error: nodes.yaml is too small, check backend!"
+            exit 1
+          fi
 
       - name: Git Push
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config --local user.email "actions@github.com"
           git config --local user.name "GitHub Action"
           git add nodes.yaml
-          # 即使没有更新也不报错退出
-          git commit -m "Update nodes $(date)" || echo "No changes to commit"
+          git commit -m "Update nodes $(date)" || echo "No changes"
           git push
 
-      - name: Refresh jsDelivr Cache
-        run: >
-          curl -s "https://purge.jsdelivr.net/gh/${{ github.repository }}@main/nodes.yaml"
+      - name: Refresh jsDelivr
+        run: curl -s "https://purge.jsdelivr.net/gh/${{ github.repository }}@main/nodes.yaml"
