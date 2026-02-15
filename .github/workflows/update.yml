@@ -17,7 +17,7 @@ jobs:
         run: |
           # 如果 xeton 挂了，换成这个 id9 的后端尝试
           SOURCE_1="https://raw.githubusercontent.com/anaer/Sub/main/clash.yaml"
-          curl -L -o nodes.yaml "https://my.88244478.xyz:26666/sub?target=clash&list=true&url=${SOURCE_1}"
+          curl -L -o nodes.yaml "https://subapi.zrfme.com/sub?target=clash&list=true&url=${SOURCE_1}"
 
       - name: Git Push
         env:
