@@ -25,7 +25,7 @@ jobs:
           SUB_URL="https://raw.githubusercontent.com/anaer/Sub/main/clash.yaml"
           
           # 这里换一个更强力的公共后端：url.v1.mk
-          curl -L -o nodes.yaml "https://url.v1.mk/sub?target=clash&list=true&url=${SUB_URL}"
+          curl -L -o nodes.yaml "https://subapi.zrfme.com/sub?target=clash&list=true&url=${SUB_URL}"
           
           # 3. 检查文件大小，如果小于 100 字节，说明转换失败，报错停止，不推送到仓库
           if [ $(stat -c%s "nodes.yaml") -lt 100 ]; then
