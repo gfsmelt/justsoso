@@ -18,34 +18,45 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Install PyYAML
-        run: pip install PyYAML
+      - name: Install dependencies
+        run: pip install PyYAML requests
 
-      - name: Extract Proxies via Python
+      - name: Extract Proxies
         run: |
           python - <<EOF
           import yaml
           import requests
+          import sys
 
-          url = "https://raw.githubusercontent.com/anaer/Sub/main/clash.yaml"
-          try:
-              # 1. 下载文件
-              r = requests.get(url, timeout=30)
-              data = yaml.safe_load(r.text)
+          # 备选源列表（都是 Clash 格式）
+          urls = [
+              "https://fastly.jsdelivr.net/gh/anaer/Sub@main/clash.yaml",
+              "https://raw.githubusercontent.com/anaer/Sub/main/clash.yaml",
+              "https://raw.githubusercontent.com/oslook/free-clash/main/clash.yaml"
+          ]
 
-              # 2. 提取 proxies 部分
-              if 'proxies' in data:
-                  output = {'proxies': data['proxies']}
-                  # 3. 保存为 nodes.yaml
-                  with open('nodes.yaml', 'w', encoding='utf-8') as f:
-                      yaml.dump(output, f, allow_unicode=True, sort_keys=False)
-                  print("Successfully extracted proxies!")
-              else:
-                  print("Error: No 'proxies' field found in the source!")
-                  exit(1)
-          except Exception as e:
-              print(f"Error: {e}")
-              exit(1)
+          success = False
+          for url in urls:
+              try:
+                  print(f"Trying to fetch: {url}")
+                  r = requests.get(url, timeout=15)
+                  r.raise_for_status()
+                  # 尝试解析 YAML
+                  data = yaml.safe_load(r.text)
+                  
+                  if data and isinstance(data, dict) and 'proxies' in data:
+                      output = {'proxies': data['proxies']}
+                      with open('nodes.yaml', 'w', encoding='utf-8') as f:
+                          yaml.dump(output, f, allow_unicode=True, sort_keys=False)
+                      print(f"Successfully extracted {len(data['proxies'])} proxies!")
+                      success = True
+                      break
+              except Exception as e:
+                  print(f"Failed to fetch {url}: {e}")
+
+          if not success:
+              print("All sources failed!")
+              sys.exit(1)
           EOF
 
       - name: Git Push
