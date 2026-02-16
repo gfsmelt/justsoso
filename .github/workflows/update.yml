@@ -13,25 +13,40 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Extract Proxies Only
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install PyYAML
+        run: pip install PyYAML
+
+      - name: Extract Proxies via Python
         run: |
-          # 1. 下载原始完整配置文件
-          curl -L -o full.yaml "https://raw.githubusercontent.com/anaer/Sub/main/clash.yaml"
-          
-          # 2. 使用 yq 提取 proxies 字段并重新生成 YAML
-          # yq 会自动处理格式，确保输出只有 proxies: 及其下方内容
-          # 如果没有 yq，Ubuntu runner 自带了，可以直接用
-          yq '.proxies' full.yaml > nodes_list.yaml
-          
-          # 3. 构造 Mihomo 要求的规范格式 (必须有 proxies: 头部)
-          echo "proxies:" > nodes.yaml
-          cat nodes_list.yaml >> nodes.yaml
-          
-          # 4. 检查是否真的提取到了内容（防止后端下回来的是 HTML 报错页面）
-          if [ $(stat -c%s "nodes.yaml") -lt 200 ]; then
-            echo "提取失败，内容过短"
-            exit 1
-          fi
+          python - <<EOF
+          import yaml
+          import requests
+
+          url = "https://raw.githubusercontent.com/anaer/Sub/main/clash.yaml"
+          try:
+              # 1. 下载文件
+              r = requests.get(url, timeout=30)
+              data = yaml.safe_load(r.text)
+
+              # 2. 提取 proxies 部分
+              if 'proxies' in data:
+                  output = {'proxies': data['proxies']}
+                  # 3. 保存为 nodes.yaml
+                  with open('nodes.yaml', 'w', encoding='utf-8') as f:
+                      yaml.dump(output, f, allow_unicode=True, sort_keys=False)
+                  print("Successfully extracted proxies!")
+              else:
+                  print("Error: No 'proxies' field found in the source!")
+                  exit(1)
+          except Exception as e:
+              print(f"Error: {e}")
+              exit(1)
+          EOF
 
       - name: Git Push
         run: |
