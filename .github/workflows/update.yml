@@ -13,16 +13,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Direct Download
+      - name: Direct Download and Format
         run: |
-          # 直接下载原始 Clash 文件，不经过任何转换接口
-          curl -L -o nodes.yaml "https://raw.githubusercontent.com/anaer/Sub/main/clash.yaml"
+          # 1. 下载原始文件
+          curl -L -o full_config.yaml "https://raw.githubusercontent.com/anaer/Sub/main/clash.yaml"
           
-          # 检查下载的文件是否包含基本的 Clash 关键词
+          # 2. 使用 yq 或 sed 提取 proxies 部分 (这里用 sed 简单粗暴但有效)
+          # 我们只保留从 'proxies:' 开始到第一个 'proxy-groups:' 之前的内容
+          sed -n '/^proxies:/,/^proxy-groups:/p' full_config.yaml | sed '$d' > nodes.yaml
+          
+          # 3. 检查 nodes.yaml 是否符合标准
           if ! grep -q "proxies:" nodes.yaml; then
-            echo "错误：下载的文件不是有效的 Clash 配置文件"
+            echo "提取失败，文件不规范"
             exit 1
           fi
+
 
       - name: Git Push
         run: |
