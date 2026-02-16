@@ -13,18 +13,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Direct Download and Format
+      - name: Extract Proxies Only
         run: |
-          # 1. 下载原始文件
-          curl -L -o full_config.yaml "https://raw.githubusercontent.com/anaer/Sub/main/clash.yaml"
+          # 1. 下载原始完整配置文件
+          curl -L -o full.yaml "https://raw.githubusercontent.com/anaer/Sub/main/clash.yaml"
           
-          # 2. 使用 yq 或 sed 提取 proxies 部分 (这里用 sed 简单粗暴但有效)
-          # 我们只保留从 'proxies:' 开始到第一个 'proxy-groups:' 之前的内容
-          sed -n '/^proxies:/,/^proxy-groups:/p' full_config.yaml | sed '$d' > nodes.yaml
+          # 2. 使用 yq 提取 proxies 字段并重新生成 YAML
+          # yq 会自动处理格式，确保输出只有 proxies: 及其下方内容
+          # 如果没有 yq，Ubuntu runner 自带了，可以直接用
+          yq '.proxies' full.yaml > nodes_list.yaml
           
-          # 3. 检查 nodes.yaml 是否符合标准
-          if ! grep -q "proxies:" nodes.yaml; then
-            echo "提取失败，文件不规范"
+          # 3. 构造 Mihomo 要求的规范格式 (必须有 proxies: 头部)
+          echo "proxies:" > nodes.yaml
+          cat nodes_list.yaml >> nodes.yaml
+          
+          # 4. 检查是否真的提取到了内容（防止后端下回来的是 HTML 报错页面）
+          if [ $(stat -c%s "nodes.yaml") -lt 200 ]; then
+            echo "提取失败，内容过短"
             exit 1
           fi
 
