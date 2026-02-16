@@ -18,17 +18,13 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install dependencies
-        run: pip install PyYAML requests
-
-      - name: Extract Proxies
+      - name: Extract Proxies Brute Force
         run: |
           python - <<EOF
-          import yaml
           import requests
+          import re
           import sys
 
-          # 增加几个备用源，防止单个源挂掉
           urls = [
               "https://fastly.jsdelivr.net/gh/anaer/Sub@main/clash.yaml",
               "https://raw.githubusercontent.com/anaer/Sub/main/clash.yaml"
@@ -39,21 +35,22 @@ jobs:
               try:
                   print(f"Fetching: {url}")
                   r = requests.get(url, timeout=20)
-                  r.encoding = 'utf-8' # 强制使用 utf-8
+                  r.encoding = 'utf-8'
+                  text = r.text
+
+                  # 暴力逻辑：正则匹配 proxies: 及其后的所有内容，直到遇到下一个主要字段
+                  # 这种方法不解析 YAML，直接截取文本
+                  match = re.search(r'(proxies:.*?)(\n[a-z\- ]+:[ \n]|\Z)', text, re.DOTALL)
                   
-                  # 使用 SafeLoader 并增加特殊字符容错
-                  data = yaml.load(r.text, Loader=yaml.FullLoader)
-                  
-                  if data and 'proxies' in data:
-                      nodes = data['proxies']
-                      # 强制写文件时使用 utf-8 编码，解决国旗图标报错
-                      with open('nodes.yaml', 'w', encoding='utf-8') as f:
-                          f.write("proxies:\n")
-                          yaml.dump(nodes, f, allow_unicode=True, sort_keys=False, default_flow_style=False)
-                      
-                      print(f"Done! Extracted {len(nodes)} nodes.")
-                      success = True
-                      break
+                  if match:
+                      content = match.group(1).strip()
+                      # 确保内容包含节点列表
+                      if "- name:" in content:
+                          with open('nodes.yaml', 'w', encoding='utf-8') as f:
+                              f.write(content + "\n")
+                          print("Success! Brute force extraction completed.")
+                          success = True
+                          break
               except Exception as e:
                   print(f"Error skipping {url}: {e}")
 
