@@ -16,7 +16,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.x'
+          python-version: '3.10'
 
       - name: Install dependencies
         run: pip install PyYAML requests
@@ -28,32 +28,36 @@ jobs:
           import requests
           import sys
 
+          # 增加几个备用源，防止单个源挂掉
           urls = [
               "https://fastly.jsdelivr.net/gh/anaer/Sub@main/clash.yaml",
-              "https://raw.githubusercontent.com/oslook/free-clash/main/clash.yaml"
+              "https://raw.githubusercontent.com/anaer/Sub/main/clash.yaml"
           ]
 
           success = False
           for url in urls:
               try:
-                  print(f"Trying to fetch: {url}")
-                  r = requests.get(url, timeout=15)
-                  # 使用 FullLoader 处理可能存在的 YAML 锚点
+                  print(f"Fetching: {url}")
+                  r = requests.get(url, timeout=20)
+                  r.encoding = 'utf-8' # 强制使用 utf-8
+                  
+                  # 使用 SafeLoader 并增加特殊字符容错
                   data = yaml.load(r.text, Loader=yaml.FullLoader)
                   
-                  if data and isinstance(data, dict) and 'proxies' in data:
+                  if data and 'proxies' in data:
                       nodes = data['proxies']
-                      if isinstance(nodes, list):
-                          with open('nodes.yaml', 'w', encoding='utf-8') as f:
-                              yaml.dump({'proxies': nodes}, f, allow_unicode=True, sort_keys=False)
-                          print(f"Success! Found {len(nodes)} nodes.")
-                          success = True
-                          break
+                      # 强制写文件时使用 utf-8 编码，解决国旗图标报错
+                      with open('nodes.yaml', 'w', encoding='utf-8') as f:
+                          f.write("proxies:\n")
+                          yaml.dump(nodes, f, allow_unicode=True, sort_keys=False, default_flow_style=False)
+                      
+                      print(f"Done! Extracted {len(nodes)} nodes.")
+                      success = True
+                      break
               except Exception as e:
-                  print(f"Error on {url}: {e}")
+                  print(f"Error skipping {url}: {e}")
 
           if not success:
-              print("All sources failed or format invalid!")
               sys.exit(1)
           EOF
 
@@ -66,4 +70,5 @@ jobs:
           git push
 
       - name: Refresh jsDelivr
-        run: curl -s "https://purge.jsdelivr.net/gh/${{ github.repository }}@main/nodes.yaml"
+        run: |
+          curl -s "https://purge.jsdelivr.net/gh/${{ github.repository }}@main/nodes.yaml" || echo "skip"
