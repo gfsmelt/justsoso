@@ -28,10 +28,8 @@ jobs:
           import requests
           import sys
 
-          # 备选源列表（都是 Clash 格式）
           urls = [
               "https://fastly.jsdelivr.net/gh/anaer/Sub@main/clash.yaml",
-              "https://raw.githubusercontent.com/anaer/Sub/main/clash.yaml",
               "https://raw.githubusercontent.com/oslook/free-clash/main/clash.yaml"
           ]
 
@@ -40,22 +38,22 @@ jobs:
               try:
                   print(f"Trying to fetch: {url}")
                   r = requests.get(url, timeout=15)
-                  r.raise_for_status()
-                  # 尝试解析 YAML
-                  data = yaml.safe_load(r.text)
+                  # 使用 FullLoader 处理可能存在的 YAML 锚点
+                  data = yaml.load(r.text, Loader=yaml.FullLoader)
                   
                   if data and isinstance(data, dict) and 'proxies' in data:
-                      output = {'proxies': data['proxies']}
-                      with open('nodes.yaml', 'w', encoding='utf-8') as f:
-                          yaml.dump(output, f, allow_unicode=True, sort_keys=False)
-                      print(f"Successfully extracted {len(data['proxies'])} proxies!")
-                      success = True
-                      break
+                      nodes = data['proxies']
+                      if isinstance(nodes, list):
+                          with open('nodes.yaml', 'w', encoding='utf-8') as f:
+                              yaml.dump({'proxies': nodes}, f, allow_unicode=True, sort_keys=False)
+                          print(f"Success! Found {len(nodes)} nodes.")
+                          success = True
+                          break
               except Exception as e:
-                  print(f"Failed to fetch {url}: {e}")
+                  print(f"Error on {url}: {e}")
 
           if not success:
-              print("All sources failed!")
+              print("All sources failed or format invalid!")
               sys.exit(1)
           EOF
 
