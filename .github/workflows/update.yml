@@ -13,64 +13,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-
-      - name: Extract and Align Proxies
+      - name: Download File
         run: |
-          python - <<EOF
-          import requests
-          import re
-          import sys
-
-          urls = [
-              "https://raw.githubusercontent.com/anaer/Sub/main/clash.yaml",
-              "https://fastly.jsdelivr.net/gh/anaer/Sub@main/clash.yaml"
-          ]
-
-          success = False
-          for url in urls:
-              try:
-                  print(f"Fetching: {url}")
-                  r = requests.get(url, timeout=20)
-                  r.encoding = 'utf-8'
-                  text = r.text
-
-                  # 1. 匹配从 - name: 开始的所有节点部分
-                  match = re.search(r'(- name:.*)', text, re.DOTALL)
-                  
-                  if match:
-                      raw_nodes = match.group(1).strip()
-                      # 2. 核心修复：将每一行开头都加上两个空格
-                      lines = raw_nodes.split('\n')
-                      indented_nodes = "\n".join(["  " + line for line in lines])
-                      
-                      with open('nodes.yaml', 'w', encoding='utf-8') as f:
-                          # 3. 写入顶格的 proxies: 头部
-                          f.write("proxies:\n")
-                          # 4. 写入带缩进的节点
-                          f.write(indented_nodes + "\n")
-                          
-                      print("Success! Nodes aligned correctly.")
-                      success = True
-                      break
-              except Exception as e:
-                  print(f"Error skipping {url}: {e}")
-
-          if not success:
-              sys.exit(1)
-          EOF
+          # 我们换一个更稳定的源，且直接用 -L 跟随重定向
+          # 这个源本身就是 Clash 格式，不需要转换后端
+          curl -L -o nodes.yaml "https://raw.githubusercontent.com/anaer/Sub/main/clash.yaml"
 
       - name: Git Push
         run: |
           git config --local user.email "actions@github.com"
           git config --local user.name "GitHub Action"
           git add nodes.yaml
-          git commit -m "Update nodes (aligned) $(date)" || echo "No changes"
+          git commit -m "Update nodes" || echo "No changes"
           git push
 
       - name: Refresh jsDelivr
-        run: |
-          curl -s "https://purge.jsdelivr.net/gh/${{ github.repository }}@main/nodes.yaml" || echo "skip"
+        run: curl -s "https://purge.jsdelivr.net/gh/${{ github.repository }}@main/nodes.yaml"
