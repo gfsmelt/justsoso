@@ -18,7 +18,7 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Extract Proxies Brute Force
+      - name: Extract and Align Proxies
         run: |
           python - <<EOF
           import requests
@@ -26,8 +26,8 @@ jobs:
           import sys
 
           urls = [
-              "https://fastly.jsdelivr.net/gh/anaer/Sub@main/clash.yaml",
-              "https://raw.githubusercontent.com/anaer/Sub/main/clash.yaml"
+              "https://raw.githubusercontent.com/anaer/Sub/main/clash.yaml",
+              "https://fastly.jsdelivr.net/gh/anaer/Sub@main/clash.yaml"
           ]
 
           success = False
@@ -38,19 +38,24 @@ jobs:
                   r.encoding = 'utf-8'
                   text = r.text
 
-                  # 暴力逻辑：正则匹配 proxies: 及其后的所有内容，直到遇到下一个主要字段
-                  # 这种方法不解析 YAML，直接截取文本
-                  match = re.search(r'(proxies:.*?)(\n[a-z\- ]+:[ \n]|\Z)', text, re.DOTALL)
+                  # 1. 匹配从 - name: 开始的所有节点部分
+                  match = re.search(r'(- name:.*)', text, re.DOTALL)
                   
                   if match:
-                      content = match.group(1).strip()
-                      # 确保内容包含节点列表
-                      if "- name:" in content:
-                          with open('nodes.yaml', 'w', encoding='utf-8') as f:
-                              f.write(content + "\n")
-                          print("Success! Brute force extraction completed.")
-                          success = True
-                          break
+                      raw_nodes = match.group(1).strip()
+                      # 2. 核心修复：将每一行开头都加上两个空格
+                      lines = raw_nodes.split('\n')
+                      indented_nodes = "\n".join(["  " + line for line in lines])
+                      
+                      with open('nodes.yaml', 'w', encoding='utf-8') as f:
+                          # 3. 写入顶格的 proxies: 头部
+                          f.write("proxies:\n")
+                          # 4. 写入带缩进的节点
+                          f.write(indented_nodes + "\n")
+                          
+                      print("Success! Nodes aligned correctly.")
+                      success = True
+                      break
               except Exception as e:
                   print(f"Error skipping {url}: {e}")
 
@@ -63,7 +68,7 @@ jobs:
           git config --local user.email "actions@github.com"
           git config --local user.name "GitHub Action"
           git add nodes.yaml
-          git commit -m "Update nodes $(date)" || echo "No changes"
+          git commit -m "Update nodes (aligned) $(date)" || echo "No changes"
           git push
 
       - name: Refresh jsDelivr
